@@ -1,0 +1,4 @@
+timestamp,level,message,user_id
+2026-03-27T10:00:00Z,INFO,User logged in,101
+2026-03-27T10:05:00Z,ERROR,Database connection failed,102
+2026-03-27T10:10:00Z,WARN,Retry attempt 1,102
