@@ -1,0 +1,2 @@
+{"timestamp": "2026-03-27T10:00:00Z", "level": "INFO", "message": "User logged in", "user_id": 101}
+{"timestamp": "2026-03-27T10:05:00Z", "level": "ERROR", "message": "Database connection failed", "user_id": 102}
