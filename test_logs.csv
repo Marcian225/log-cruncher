@@ -2,3 +2,10 @@ timestamp,level,message,user_id
 2026-03-27T10:00:00Z,INFO,User logged in,101
 2026-03-27T10:05:00Z,ERROR,Database connection failed,102
 2026-03-27T10:10:00Z,WARN,Retry attempt 1,102
+2026-03-27T10:15:00Z,DEBUG,Cache miss for user profile,101
+2026-03-27T10:20:00Z,INFO,User updated settings,101
+2026-03-27T10:25:00Z,ERROR,Payment gateway timeout,105
+2026-03-27T10:30:00Z,FATAL,Service crashed unexpectedly,0
+2026-03-27T10:35:00Z,INFO,Service restarted,0
+2026-03-27T10:40:00Z,WARN,High memory usage detected,0
+2026-03-27T10:45:00Z,DEBUG,Flushing old sessions,0

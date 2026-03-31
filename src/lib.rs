@@ -90,3 +90,57 @@ fn parse_json_lines(file_path: &str) -> Result<Vec<LogEntry>, std::io::Error> {
 
     return Ok(output)
 }
+
+#[cfg(test)]
+
+mod tests{
+    use super::*;
+
+    #[test]
+    fn test_parse_json_lines_valid() {
+        let logs = parse_json_lines("test_logs.jsonl").expect("Failed to read JSONL file");
+
+        let expected_levels = ["INFO", "ERROR", "WARN", "DEBUG", "INFO", "ERROR", "FATAL", "INFO", "WARN", "DEBUG"];
+        let expected_user_ids = [101, 102, 102, 101, 101, 105, 0, 0, 0, 0];
+
+        assert_eq!(logs.len(), 10, "Should have parsed exactly 10 lines");
+        for (i, log) in logs.iter().enumerate() {
+            assert_eq!(log.level, expected_levels[i], "JSONL line {} level mismatch", i + 1);
+            assert_eq!(log.user_id, expected_user_ids[i], "JSONL line {} user_id mismatch", i + 1);
+        }
+
+        assert_eq!(logs[0].message, "User logged in");
+        assert_eq!(logs[9].message, "Flushing old sessions");
+    }
+
+    #[test]
+    fn test_parse_csv_valid() {
+        let logs = parse_csv("test_logs.csv").expect("Failed to read CSV file");
+
+        let expected_levels = ["INFO", "ERROR", "WARN", "DEBUG", "INFO", "ERROR", "FATAL", "INFO", "WARN", "DEBUG"];
+        let expected_user_ids = [101, 102, 102, 101, 101, 105, 0, 0, 0, 0];
+
+        assert_eq!(logs.len(), 10, "Should have parsed exactly 10 lines");
+        for (i, log) in logs.iter().enumerate() {
+            assert_eq!(log.level, expected_levels[i], "CSV line {} level mismatch", i + 1);
+            assert_eq!(log.user_id, expected_user_ids[i], "CSV line {} user_id mismatch", i + 1);
+        }
+
+        assert_eq!(logs[0].timestamp, "2026-03-27T10:00:00Z");
+        assert_eq!(logs[9].message, "Flushing old sessions");
+    }
+
+    #[test]
+    fn test_parse_functions_roundtrip() {
+        let csv_logs = parse_csv("test_logs.csv").expect("Failed to parse CSV");
+        let json_logs = parse_json_lines("test_logs.jsonl").expect("Failed to parse JSONL");
+
+        assert_eq!(csv_logs.len(), 10);
+        assert_eq!(json_logs.len(), 10);
+        assert_eq!(csv_logs[1].level, "ERROR");
+        assert_eq!(json_logs[1].level, "ERROR");
+
+        let errors = filter_errors(csv_logs.clone());
+        assert_eq!(errors.len(), 2, "Should be exactly 2 error-level entries (ERROR only)");
+    }
+}
