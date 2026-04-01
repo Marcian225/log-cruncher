@@ -17,7 +17,7 @@ def main():
     print("first log level: ", processed_logs[0].level)
 
 
-def stream_errors_csvreader(file_path):
+def stream_logs_csvreader(file_path, target_level):
 
     with open(file_path, newline='') as f:
         reader = csv.reader(f, delimiter=',')
@@ -26,41 +26,63 @@ def stream_errors_csvreader(file_path):
         print(f"Skipping these columns: {header}")
         for row in reader:
             timestamp, level, message, user_id = row
-            if level == 'ERROR':
+            if level == target_level:
                 yield row
 
 
-
-def stream_errors_dictreader(file_path):
+def stream_logs_dictreader(file_path, target_level):
 
     with open(file_path, newline='') as f:
         reader = csv.DictReader(f)
 
         for row in reader:
-            if row['level'] == 'ERROR':
+            if row['level'] == target_level:
                 yield row
 
 def parse_csvreader():
     start = time.perf_counter()
-    errors = list(stream_errors_csvreader("massive_logs.csv"))
+    errors = list(stream_logs_csvreader("massive_logs.csv", "WARN"))
     print(f"csv.reader Total errors: {len(errors)}")
     print(f"csv.reader Time: {time.perf_counter() - start:.4f} seconds\n")
 
 def parse_dictreader():
     start = time.perf_counter()
-    errors = list(stream_errors_dictreader("massive_logs.csv"))
+    errors = list(stream_logs_dictreader("massive_logs.csv", "WARN"))
     print(f"csv.DictReader Total errors: {len(errors)}")
     print(f"csv.DictReader Time: {time.perf_counter() - start:.4f} seconds\n")
 
-def rust_parser():
+def rust_csv_parser():
     start = time.perf_counter()
-    error_logs = log_cruncher.get_error_logs("massive_logs.csv")
-    print(f"Rust Total errors: {len(error_logs)}")
-    print(f"Rust Time: {time.perf_counter() - start:.4f} seconds\n")
+    error_logs = log_cruncher.filter_csv_by_level("massive_logs.csv", "WARN")
+    print(f"Rust CSV Total errors: {len(error_logs)}")
+    print(f"Rust CSV Time: {time.perf_counter() - start:.4f} seconds\n")
 
+def rust_json_parser():
+    start = time.perf_counter()
+    error_logs = log_cruncher.filter_json_by_level("massive_logs.jsonl", "WARN")
+    print(f"Rust JSONL Total errors: {len(error_logs)}")
+    print(f"Rust JSONL Time: {time.perf_counter() - start:.4f} seconds\n")
+
+def rust_batch_parser():
+    start = time.perf_counter()
+
+    # We can specify the target level, and optionally override the 100,000 default chunk size
+    processor = log_cruncher.BatchLogProcessor("massive_logs.jsonl", "WARN", 500_000)
+
+    total_logs = 0
+
+    # The Rust iterator yields one filtered chunk (list) at a time
+    for chunk in processor:
+        total_logs += len(chunk)
+
+    duration = time.perf_counter() - start
+    print(f"Rust Batch Total logs: {total_logs}")
+    print(f"Rust Batch Time taken: {duration:.4f} seconds")
 
 if __name__ == "__main__":
     print("Starting Benchmarks...\n")
     parse_csvreader()
     parse_dictreader()
-    rust_parser()
+    rust_csv_parser()
+    rust_json_parser()
+    rust_batch_parser()

@@ -1,4 +1,5 @@
 import csv
+import json
 import random
 from datetime import datetime, timedelta
 
@@ -39,4 +40,19 @@ def pandas_generate():
     print("Done generating massive_logs.csv with pandas")
 
 
-pandas_generate()
+def jsonl_generate():
+    with open('massive_logs.jsonl', 'w', buffering=BUFFER_SIZE) as f:
+        start_time = datetime(2026, 3, 27, 10, 0, 0)
+        for i in range(2_000_000):
+            row = {
+                'timestamp': (start_time + timedelta(seconds=i)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                'level': random.choice(levels),
+                'message': random.choice(messages),
+                'user_id': random.randint(0, 1000)
+            }
+            json.dump(row, f)
+            f.write('\n')
+        print("Done generating massive_logs.jsonl")
+
+
+jsonl_generate()

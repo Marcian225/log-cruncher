@@ -70,3 +70,7 @@ docs/_build/
 
 # Pyenv
 .python-version
+
+#Data files
+massive_logs.csv
+massive_logs.jsonl
