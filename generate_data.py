@@ -8,7 +8,7 @@ levels = ['INFO', 'ERROR', 'WARN', 'DEBUG', 'FATAL']
 messages = ["User logged in", "Database connection failed", "Retry attempt 1", "Cache miss", "Payment timeout"]
 
 
-def python_generate():
+def csv_generate():
 
     with open('massive_logs.csv', 'w', newline='', buffering=BUFFER_SIZE) as f:
         writer = csv.writer(f)
@@ -27,7 +27,7 @@ def python_generate():
 
 
 import pandas as pd
-def pandas_generate():
+def pandas_generate_csv():
 
     start_time = datetime(2026, 3, 27, 10, 0, 0)
     df  = pd.DataFrame({
