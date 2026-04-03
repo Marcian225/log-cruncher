@@ -145,7 +145,7 @@ def python_lazy(file_path: str, target_level: str = None, chunk_size: int = 100_
 def main():
     print("--- Log Cruncher Benchmark Showcase ---\n")
     
-    test_file = "massive_logs.csv"  # change to desired file (CSV or JSONL)
+    test_file = "massive_logs.jsonl"  # change to desired file (CSV or JSONL)
     target = "ERROR" # change to desired log level for filtering ['INFO', 'ERROR', 'WARN', 'DEBUG', 'FATAL']
     
     try:
