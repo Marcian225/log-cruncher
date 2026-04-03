@@ -4,55 +4,76 @@ import random
 from datetime import datetime, timedelta
 
 BUFFER_SIZE = 128 * 1024
-levels = ['INFO', 'ERROR', 'WARN', 'DEBUG', 'FATAL']
-messages = ["User logged in", "Database connection failed", "Retry attempt 1", "Cache miss", "Payment timeout"]
+NUM_ROWS = 2_000_000  
 
+# Realistic distributions
+LEVELS = ['INFO', 'WARN', 'ERROR', 'DEBUG', 'FATAL']
+LEVEL_WEIGHTS = [0.70, 0.15, 0.10, 0.04, 0.01]
 
-def csv_generate():
+METHODS = ['GET', 'POST', 'PUT', 'DELETE']
+METHOD_WEIGHTS = [0.60, 0.30, 0.05, 0.05]
 
+ENDPOINTS = ['/api/v1/checkout', '/api/v1/catalog', '/api/v1/login', '/api/v1/profile']
+ENDPOINT_WEIGHTS = [0.20, 0.50, 0.10, 0.20]
+
+def generate_record(current_time: datetime) -> dict:
+    level = random.choices(LEVELS, weights=LEVEL_WEIGHTS, k=1)[0]
+    method = random.choices(METHODS, weights=METHOD_WEIGHTS, k=1)[0]
+    endpoint = random.choices(ENDPOINTS, weights=ENDPOINT_WEIGHTS, k=1)[0]
+    
+    # Correlate status code and latency with log level for realism
+    if level in ['INFO', 'DEBUG']:
+        status_code = random.choice([200, 201])
+        response_time_ms = int(random.expovariate(1/50)) + 10  # Fast responses
+        message = "Request processed successfully"
+    elif level == 'WARN':
+        status_code = random.choice([400, 401, 403, 404, 429])
+        response_time_ms = int(random.expovariate(1/100)) + 20
+        message = "Client error or rate limit exceeded"
+    elif level == 'ERROR':
+        status_code = random.choice([500, 503, 504])
+        response_time_ms = int(random.expovariate(1/1000)) + 500  # Slow responses/timeouts
+        message = "Database timeout or internal exception"
+    else:  # FATAL
+        status_code = 502
+        response_time_ms = 5000  # Max timeout
+        message = "Payment gateway crashed unexpectedly"
+        
+    return {
+        "timestamp": current_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "level": level,
+        "method": method,
+        "endpoint": endpoint,
+        "status_code": status_code,
+        "response_time_ms": response_time_ms,
+        "user_id": random.randint(1, 10000),
+        "message": message
+    }
+
+def generate_csv():
+    print("Generating massive_logs.csv...")
     with open('massive_logs.csv', 'w', newline='', buffering=BUFFER_SIZE) as f:
-        writer = csv.writer(f)
-        writer.writerow(['timestamp', 'level', 'message', 'user_id'])
-            
-
+        writer = csv.DictWriter(f, fieldnames=[
+            "timestamp", "level", "method", "endpoint", 
+            "status_code", "response_time_ms", "user_id", "message"
+        ])
+        writer.writeheader()
+        
         start_time = datetime(2026, 3, 27, 10, 0, 0)
-        for i in range(2_000_000):
-            writer.writerow([
-                (start_time + timedelta(seconds=i)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                random.choice(levels),
-                random.choice(messages),
-                random.randint(0, 1000)
-            ])
-        print("Done generating massive_logs.csv")
+        for i in range(NUM_ROWS):
+            record = generate_record(start_time + timedelta(seconds=i))
+            writer.writerow(record)
+    print("Done generating massive_logs.csv")
 
-
-import pandas as pd
-def pandas_generate_csv():
-
-    start_time = datetime(2026, 3, 27, 10, 0, 0)
-    df  = pd.DataFrame({
-        'timestamp': [start_time + timedelta(seconds=i) for i in range(2_000_000)],
-        'level': [random.choice(levels) for _ in range(2_000_000)],
-        'message': [random.choice(messages) for _ in range(2_000_000)],
-        'user_id': [random.randint(0, 1000) for _ in range(2_000_000)]
-    })
-    df.to_csv('massive_logs.csv', index=False, chunksize=BUFFER_SIZE)
-    print("Done generating massive_logs.csv with pandas")
-
-
-def jsonl_generate():
+def generate_jsonl():
+    print("Generating massive_logs.jsonl...")
     with open('massive_logs.jsonl', 'w', buffering=BUFFER_SIZE) as f:
         start_time = datetime(2026, 3, 27, 10, 0, 0)
-        for i in range(2_000_000):
-            row = {
-                'timestamp': (start_time + timedelta(seconds=i)).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                'level': random.choice(levels),
-                'message': random.choice(messages),
-                'user_id': random.randint(0, 1000)
-            }
-            json.dump(row, f)
-            f.write('\n')
-        print("Done generating massive_logs.jsonl")
+        for i in range(NUM_ROWS):
+            record = generate_record(start_time + timedelta(seconds=i))
+            f.write(json.dumps(record) + '\n')
+    print("Done generating massive_logs.jsonl")
 
-
-jsonl_generate()
+if __name__ == "__main__":
+    generate_csv()
+    generate_jsonl()

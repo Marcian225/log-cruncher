@@ -1,11 +1,11 @@
-timestamp,level,message,user_id
-2026-03-27T10:00:00Z,INFO,User logged in,101
-2026-03-27T10:05:00Z,ERROR,Database connection failed,102
-2026-03-27T10:10:00Z,WARN,Retry attempt 1,102
-2026-03-27T10:15:00Z,DEBUG,Cache miss for user profile,101
-2026-03-27T10:20:00Z,INFO,User updated settings,101
-2026-03-27T10:25:00Z,ERROR,Payment gateway timeout,105
-2026-03-27T10:30:00Z,FATAL,Service crashed unexpectedly,0
-2026-03-27T10:35:00Z,INFO,Service restarted,0
-2026-03-27T10:40:00Z,WARN,High memory usage detected,0
-2026-03-27T10:45:00Z,DEBUG,Flushing old sessions,0
+timestamp,level,method,endpoint,status_code,response_time_ms,user_id,message
+2026-03-27T10:00:00Z,INFO,GET,/api/v1/catalog,200,45,101,Catalog loaded
+2026-03-27T10:01:00Z,INFO,POST,/api/v1/login,200,120,102,User authenticated
+2026-03-27T10:02:00Z,WARN,GET,/api/v1/profile,429,35,102,Rate limit exceeded
+2026-03-27T10:03:00Z,ERROR,POST,/api/v1/checkout,500,2450,105,Database connection timeout
+2026-03-27T10:04:00Z,FATAL,POST,/api/v1/checkout,502,5000,105,Payment gateway crashed
+2026-03-27T10:05:00Z,INFO,GET,/api/v1/catalog,200,38,108,Catalog loaded
+2026-03-27T10:06:00Z,DEBUG,GET,/api/v1/profile,200,40,102,Cache miss for user profile
+2026-03-27T10:07:00Z,ERROR,POST,/api/v1/login,500,1890,110,Auth service unavailable
+2026-03-27T10:08:00Z,INFO,GET,/api/v1/catalog,200,42,101,Catalog loaded
+2026-03-27T10:09:00Z,WARN,GET,/api/v1/catalog,404,25,115,Item not found

@@ -1,88 +1,193 @@
-
-import log_cruncher
+import os
 import csv
+import json
+import psutil
 import time
+from functools import wraps
+import log_cruncher
 
-total_rows = 2_000_000
+def benchmark(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        process = psutil.Process(os.getpid())
+        mem_before = process.memory_info().rss / (1024 * 1024) 
+        start_time = time.perf_counter()
+        
+        count = func(*args, **kwargs)
+        
+        duration = time.perf_counter() - start_time
+        mem_after = process.memory_info().rss / (1024 * 1024)
+        mem_used = max(0, mem_after - mem_before)
+        throughput = count / duration if duration > 0 else 0
+        
+        print(f" Time: {duration:.4f}s | RAM used: {mem_used:.2f} MB | {throughput:,.0f} rows/s")
+        return count
+    return wrapper
+
+def _detect_format(file_path: str) -> str:
+    """Helper to validate file existence and format."""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+    
+    if file_path.endswith('.csv'):
+        return 'csv'
+    elif file_path.endswith('.jsonl'):
+        return 'jsonl'
+    else:
+        raise ValueError("Unsupported format. Please provide a .csv or .jsonl file.")
+
+# ---------------------------------------------------------
+# RUST PIPELINES
+# ---------------------------------------------------------
+
+@benchmark
+def rust_filter_eager(file_path: str, target_level: str):
+    """Loads the entire file into RAM at once and filters it using Rust."""
+    file_type = _detect_format(file_path)
+    if file_type == 'csv':
+        data = log_cruncher.filter_csv_by_level(file_path, target_level)
+    else:
+        data = log_cruncher.filter_json_by_level(file_path, target_level)
+    return len(data)
+
+@benchmark
+def rust_filter_lazy(file_path: str, target_level: str, chunk_size: int = 100_000):
+    """Processes the file in memory-safe chunks using Rust Rayon."""
+    _detect_format(file_path)
+    processor = log_cruncher.BatchLogProcessor(file_path, target_level, chunk_size)
+    count = 0
+    for chunk in processor:
+        count += len(chunk)
+    return count
+
+@benchmark
+def rust_process_all_lazy(file_path: str, chunk_size: int = 100_000):
+    """Processes the entire file in chunks without filtering using Rust."""
+    _detect_format(file_path)
+    processor = log_cruncher.BatchLogProcessor(file_path, None, chunk_size)
+    count = 0
+    for chunk in processor:
+        count += len(chunk)
+    return count
+
+@benchmark
+def rust_process_all_eager(file_path: str):
+    """Loads the entire file into RAM at once without filtering using Rust."""
+    file_type = _detect_format(file_path)
+    if file_type == 'csv':
+        data = log_cruncher.process_logs_csv(file_path)
+    else:
+        data = log_cruncher.process_logs_json(file_path)
+    return len(data)
+
+# ---------------------------------------------------------
+# PYTHON PIPELINES (Control Group)
+# ---------------------------------------------------------
+
+@benchmark
+def python_eager(file_path: str, target_level: str = None):
+    """Pure Python baseline: Loads everything into RAM using fast csv.reader."""
+    file_type = _detect_format(file_path)
+    data = []
+    
+    with open(file_path, 'r', newline='', encoding='utf-8') as f:
+        if file_type == 'csv':
+            reader = csv.reader(f)
+            next(reader, None) # Skip the header row
+            if target_level:
+                # row[1] assumes 'level' is the second column
+                data = [row for row in reader if row[1] == target_level]
+            else:
+                data = list(reader)
+        else:
+            for line in f:
+                record = json.loads(line)
+                if not target_level or record.get('level') == target_level:
+                    data.append(record)
+    return len(data)
+
+@benchmark
+def python_lazy(file_path: str, target_level: str = None, chunk_size: int = 100_000):
+    """Pure Python baseline: Processes data in chunks using fast csv.reader."""
+    file_type = _detect_format(file_path)
+    total_count = 0
+    
+    with open(file_path, 'r', newline='', encoding='utf-8') as f:
+        if file_type == 'csv':
+            reader = csv.reader(f)
+            next(reader, None) # Skip the header row
+            
+            chunk_count = 0
+            for row in reader:
+                if not target_level or row[1] == target_level:
+                    chunk_count += 1
+                    
+                if chunk_count == chunk_size:
+                    total_count += chunk_count
+                    chunk_count = 0
+        else:
+            chunk_count = 0
+            for line in f:
+                record = json.loads(line)
+                if not target_level or record.get('level') == target_level:
+                    chunk_count += 1
+                    
+                if chunk_count == chunk_size:
+                    total_count += chunk_count
+                    chunk_count = 0
+                    
+        if chunk_count > 0:
+            total_count += chunk_count
+            
+    return total_count
+
 
 def main():
-    # processed_logs = log_cruncher.process_logs_csv("test_logs.csv")
-    # processed_logs = log_cruncher.get_error_logs("test_logs.csv")
-    processed_logs = log_cruncher.process_logs_json("test_logs.jsonl")
+    print("--- Log Cruncher Benchmark Showcase ---\n")
     
-    for log in processed_logs:  
-        print(log)
+    test_file = "massive_logs.jsonl"  # change to desired file (CSV or JSONL)
+    target = "ERROR" # change to desired log level for filtering ['INFO', 'ERROR', 'WARN', 'DEBUG', 'FATAL']
     
-    
-    print("first log level: ", processed_logs[0].level)
+    try:
+        # 1. Filter Eager Comparison
+        print(f"1. Filter Eager (Target: {target})")
+        print("  [Python]")
+        py_eager_count = python_eager(test_file, target)
+        print(f"  Total occurrences verified (python): {py_eager_count}")
+        print("  [Rust]")
+        rust_eager_count = rust_filter_eager(test_file, target)
+        print(f"  Total occurrences verified (rust): {rust_eager_count}\n")
+            
+        # 2. Process All Eager Comparison
+        print("2. Process All Eager (No Filter)")
+        print("  [Python]")
+        py_all_eager_count = python_eager(test_file, None)
+        print(f"  Total occurrences verified (python): {py_all_eager_count}")
+        print("  [Rust]")
+        rust_all_eager_count = rust_process_all_eager(test_file)
+        print(f"  Total occurrences verified (rust): {rust_all_eager_count}\n")
+
+        # 3. Filter Lazy Comparison
+        print(f"3. Filter Lazy (Target: {target})")
+        print("  [Python]")
+        py_lazy_count = python_lazy(test_file, target)
+        print(f"  Total occurrences verified (python): {py_lazy_count}")
+        print("  [Rust]")
+        rust_lazy_count = rust_filter_lazy(test_file, target)
+        print(f"  Total occurrences verified (rust): {rust_lazy_count}\n")
+
+        # 4. Process All Lazy Comparison
+        print("4. Process All Lazy (No Filter)")
+        print("  [Python]")
+        py_all_lazy_count = python_lazy(test_file, None)
+        print(f"  Total occurrences verified (python): {py_all_lazy_count}")
+        print("  [Rust]")
+        rust_all_lazy_count = rust_process_all_lazy(test_file)
+        print(f"  Total occurrences verified (rust): {rust_all_lazy_count}\n")
 
 
-def stream_logs_csvreader(file_path, target_level):
-
-    with open(file_path, newline='') as f:
-        reader = csv.reader(f, delimiter=',')
-
-        header = next(reader) 
-        print(f"Skipping these columns: {header}")
-        for row in reader:
-            timestamp, level, message, user_id = row
-            if level == target_level:
-                yield row
-
-
-def stream_logs_dictreader(file_path, target_level):
-
-    with open(file_path, newline='') as f:
-        reader = csv.DictReader(f)
-
-        for row in reader:
-            if row['level'] == target_level:
-                yield row
-
-def parse_csvreader():
-    start = time.perf_counter()
-    errors = list(stream_logs_csvreader("massive_logs.csv", "WARN"))
-    print(f"csv.reader Total errors: {len(errors)}")
-    print(f"csv.reader Time: {time.perf_counter() - start:.4f} seconds\n")
-
-def parse_dictreader():
-    start = time.perf_counter()
-    errors = list(stream_logs_dictreader("massive_logs.csv", "WARN"))
-    print(f"csv.DictReader Total errors: {len(errors)}")
-    print(f"csv.DictReader Time: {time.perf_counter() - start:.4f} seconds\n")
-
-def rust_csv_parser():
-    start = time.perf_counter()
-    error_logs = log_cruncher.filter_csv_by_level("massive_logs.csv", "WARN")
-    print(f"Rust CSV Total errors: {len(error_logs)}")
-    print(f"Rust CSV Time: {time.perf_counter() - start:.4f} seconds\n")
-
-def rust_json_parser():
-    start = time.perf_counter()
-    error_logs = log_cruncher.filter_json_by_level("massive_logs.jsonl", "WARN")
-    print(f"Rust JSONL Total errors: {len(error_logs)}")
-    print(f"Rust JSONL Time: {time.perf_counter() - start:.4f} seconds\n")
-
-def rust_batch_parser():
-    start = time.perf_counter()
-
-    # We can specify the target level, and optionally override the 100,000 default chunk size
-    processor = log_cruncher.BatchLogProcessor("massive_logs.jsonl", "WARN", 500_000)
-
-    total_logs = 0
-
-    # The Rust iterator yields one filtered chunk (list) at a time
-    for chunk in processor:
-        total_logs += len(chunk)
-
-    duration = time.perf_counter() - start
-    print(f"Rust Batch Total logs: {total_logs}")
-    print(f"Rust Batch Time taken: {duration:.4f} seconds")
+    except Exception as e:
+        print(f"Error during execution: {e}")
 
 if __name__ == "__main__":
-    print("Starting Benchmarks...\n")
-    parse_csvreader()
-    parse_dictreader()
-    rust_csv_parser()
-    rust_json_parser()
-    rust_batch_parser()
+    main()
