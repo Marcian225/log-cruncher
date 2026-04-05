@@ -70,51 +70,35 @@ for chunk in processor:
 ```
 
 ## Benchmarks
+Performance comparison executing on a dataset of 2,000,000 synthetic log records. Python baselines utilize strict `dataclass` type coercion to accurately compare against Rust's strict `struct` parsing.
 
-Performance comparison on a dataset of 2 million rows. Tests run on local machine.
+**Hardware**:  12th Gen Intel(R) Core(TM) i7-12700KF (3.60 GHz) / 32GB DDR4/DDR5 / WSL 2.6.1.0 (Windows 11)
 
-### JSONL Format
+### 1. In-Engine Aggregation (Streaming)
+This measures compute efficiency where Rust processes data internally and returns only a final summary.
 
-#### Aggregation (count log levels)
+| Format | Implementation | Time | Throughput | RAM Spike |
+|:---|:---|---:|---:|---:|
+| **CSV** | Python Baseline | 2.53s | 788,272 rows/s | 0.00 MB |
+| **CSV** | Rust Extension | **0.42s** | **4,720,489 rows/s** | **0.00 MB** |
+| **JSONL** | Python Baseline | 4.21s | 474,004 rows/s | 0.00 MB |
+| **JSONL** | Rust Extension | **0.56s** | **3,571,659 rows/s** | **0.00 MB** |
 
-| Implementation | Time | Throughput | RAM Spike |
-|---------------|------|------------|-----------|
-| Python | 4.2194s | 474,004 rows/s | 0.00 MB |
-| Rust | 0.5600s | 3,571,659 rows/s | 0.00 MB |
+### 2. PyO3 Data Streaming Pipeline
+This test measures cross-language FFI overhead. The pipeline parses the file and yields batches of 100,000 strongly-typed Python objects back to the interpreter. 
 
-#### Streaming (no filter, chunk=100k)
+*Note: The high RAM spike in the Rust JSONL test illustrates the cost of PyO3 object allocation. The 0.00 MB spike in the subsequent CSV test is an artifact of Python's memory pooling reusing the allocated space.*
 
-| Implementation | Time | Throughput | RAM Spike |
-|---------------|------|------------|-----------|
-| Python | 4.7921s | 417,356 rows/s | 8.80 MB |
-| Rust | 0.8405s | 2,379,445 rows/s | 47.95 MB |
+| Format | Task | Implementation | Time | Throughput | RAM Spike |
+|:---|:---|:---|---:|---:|---:|
+| **JSONL** | Process All | Python Baseline | 4.79s | 417,356 rows/s | 8.80 MB |
+| **JSONL** | Process All | Rust Extension | **0.84s** | **2,379,445 rows/s** | 47.95 MB |
+| **CSV** | Process All | Python Baseline | 2.80s | 713,011 rows/s | 0.00 MB |
+| **CSV** | Process All | Rust Extension | **0.62s** | **3,224,019 rows/s** | 0.00 MB |
+| **JSONL** | Filter (ERROR) | Python Baseline | 3.35s | 59,377 rows/s | 2.74 MB |
+| **JSONL** | Filter (ERROR) | Rust Extension | **0.61s** | **325,635 rows/s** | 0.18 MB |
+| **CSV** | Filter (ERROR) | Python Baseline | 1.19s | 166,803 rows/s | 1.95 MB |
+| **CSV** | Filter (ERROR) | Rust Extension | **0.42s** | **473,713 rows/s** | 0.04 MB |
 
-#### Streaming (filtered: ERROR, chunk=100k)
 
-| Implementation | Time | Throughput | RAM Spike |
-|---------------|------|------------|-----------|
-| Python | 3.3559s | 59,377 rows/s | 2.74 MB |
-| Rust | 0.6119s | 325,635 rows/s | 0.18 MB |
-
-### CSV Format
-
-#### Aggregation (count log levels)
-
-| Implementation | Time | Throughput | RAM Spike |
-|---------------|------|------------|-----------|
-| Python | 2.5372s | 788,272 rows/s | 0.00 MB |
-| Rust | 0.4237s | 4,720,489 rows/s | 0.00 MB |
-
-#### Streaming (no filter, chunk=100k)
-
-| Implementation | Time | Throughput | RAM Spike |
-|---------------|------|------------|-----------|
-| Python | 2.8050s | 713,011 rows/s | 0.00 MB |
-| Rust | 0.6203s | 3,224,019 rows/s | 0.00 MB |
-
-#### Streaming (filtered: ERROR, chunk=100k)
-
-| Implementation | Time | Throughput | RAM Spike |
-|---------------|------|------------|-----------|
-| Python | 1.1972s | 166,803 rows/s | 1.95 MB |
-| Rust | 0.4216s | 473,713 rows/s | 0.04 MB |
+A 0.00 MB spike indicates that the operation fit entirely within the memory pages already allocated by the Python interpreter or previously cleared by the garbage collector.
