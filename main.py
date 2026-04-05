@@ -45,8 +45,17 @@ def run_batch_streaming(file_path: str, target: str = None, chunk_size: int = 10
         for chunk in processor:
             chunk_count += 1
             total_rows += len(chunk)
-            # In a real pipeline, you would pass 'chunk' to pandas/polars or a database here.
+            # to do something with data
             print(f"  Received chunk {chunk_count} | Rows in chunk: {len(chunk):,}")
+            if chunk_count == 1 and len(chunk) > 0:
+                sample = chunk[0]
+                print("\n    --- Sample Row Structure ---")
+                print(f"    Timestamp: {sample.timestamp}")
+                print(f"    Request:   {sample.method} {sample.endpoint}")
+                print(f"    Status:    {sample.status_code}")
+                print(f"    User ID:   {sample.user_id}")
+                print(f"    Latency:   {sample.response_time_ms}ms")
+                print("    ----------------------------\n")
             
         duration = time.perf_counter() - start_time
         print(f"\n--- Streaming Complete ---")

@@ -5,22 +5,40 @@ A Python module for processing log files in CSV and JSONL formats, implemented i
 The module is designed for log entries with the following fields: timestamp (string), level (string), method (string), endpoint (string), status_code (integer), response_time_ms (integer), user_id (integer), message (string).
 
 ## Installation
+Requirements: Rust, Python 3.8+, pip.
 
-Requirements: Rust, Python 3.8+, pip, maturin.
+**System Preparation (Linux/Debian-based):**
+1. Install Python: `sudo apt update && sudo apt install python3 python3-venv python3-pip`
+2. Install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+3. Load Rust environment: `source ~/.cargo/env`
 
-On Linux:
-- Install Python: `sudo apt update && sudo apt install python3 python3-pip`
-- Install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` then `source ~/.cargo/env`
-
-1. Install maturin: `pip install maturin`
-2. Clone this repository
-3. Navigate to the project directory: `cd log-cruncher`
-4. Build and install: `maturin develop`
-5. Run tests: `cargo test` and `pytest tests.py`
-
+**Project Setup:**
+1. Clone this repository and navigate to it:
+    ```bash
+   git clone [https://github.com/Marcian225/log-cruncher.git](https://github.com/Marcian225/log-cruncher.git)
+   cd log-cruncher
+2. Create and activate a Python virtual environment:
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+3. Install Python dependencies:
+   ```bash
+    pip install maturin pytest psutil
+4. Build and install the Rust extension into the virtual environment:
+   ```bash
+   maturin develop --release
+5. Verify installation by running tests:
+   ```bash
+   cargo test
+    pytest tests.py
 ## Usage
 
-### Command Line
+### Generate sample datasets
+
+Generate both `massive_logs.csv` and `massive_logs.jsonl`:
+```
+python generate_data.py
+```
 
 Aggregate log levels from a CSV file:
 ```
@@ -45,6 +63,10 @@ print(results)  # {'INFO': 4, 'ERROR': 2, ...}
 processor = log_cruncher.BatchLogProcessor('massive_logs.jsonl', 'ERROR', 100000)
 for chunk in processor:
     print(f"Received chunk with {len(chunk)} rows")
+    # The data crosses the FFI boundary as strongly-typed objects
+    if chunk:
+        sample = chunk[0]
+        print(f"Sample: [{sample.timestamp}] {sample.method} {sample.endpoint} -> {sample.status_code}")
 ```
 
 ## Benchmarks
